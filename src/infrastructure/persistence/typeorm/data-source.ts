@@ -1,0 +1,45 @@
+import 'reflect-metadata';
+import { DataSource } from 'typeorm';
+import { envConfig } from '../../config/env.config';
+import { CategoriaOrmEntity } from './entities/categoria.orm-entity';
+import { ProductoOrmEntity } from './entities/producto.orm-entity';
+import { TipoDescuentoOrmEntity } from './entities/tipo-descuento.orm-entity';
+import { EstadoPromocionOrmEntity } from './entities/estado-promocion.orm-entity';
+import { PromocionOrmEntity } from './entities/promocion.orm-entity';
+import { PromocionProductoOrmEntity } from './entities/promocion-producto.orm-entity';
+import { PromocionCategoriaOrmEntity } from './entities/promocion-categoria.orm-entity';
+import { PromocionReglaOrmEntity } from './entities/promocion-regla.orm-entity';
+import { VentaOrmEntity } from './entities/venta.orm-entity';
+import { DetalleVentaOrmEntity } from './entities/detalle-venta.orm-entity';
+
+export const AppDataSource = new DataSource({
+  type: 'mssql',
+  host: envConfig.database.host,
+  port: envConfig.database.port,
+  username: envConfig.database.username,
+  password: envConfig.database.password,
+  database: envConfig.database.database,
+  synchronize: envConfig.database.synchronize,
+  logging: envConfig.database.logging,
+  entities: [
+    CategoriaOrmEntity,
+    ProductoOrmEntity,
+    TipoDescuentoOrmEntity,
+    EstadoPromocionOrmEntity,
+    PromocionOrmEntity,
+    PromocionProductoOrmEntity,
+    PromocionCategoriaOrmEntity,
+    PromocionReglaOrmEntity,
+    VentaOrmEntity,
+    DetalleVentaOrmEntity,
+  ],
+  options: {
+    encrypt: envConfig.database.encrypt,
+    trustServerCertificate: envConfig.database.trustServerCertificate,
+    enableArithAbort: true,
+  },
+  extra: {
+    validateConnection: false,
+    trustServerCertificate: envConfig.database.trustServerCertificate,
+  },
+});

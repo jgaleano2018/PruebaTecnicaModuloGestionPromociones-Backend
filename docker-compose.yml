@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: promociones_sqlserver
+    restart: always
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${DB_PASSWORD:-Promociones#Secure2026!}"
+      MSSQL_PID: "Express"
+    ports:
+      - "${DB_PORT:-1433}:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - promociones_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: promociones_backend
+    restart: always
+    environment:
+      PORT: "${PORT:-3000}"
+      NODE_ENV: production
+      API_PREFIX: "${API_PREFIX:-/api/v1}"
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_USER: sa
+      DB_PASSWORD: "${DB_PASSWORD:-Promociones#Secure2026!}"
+      DB_NAME: "${DB_NAME:-PromocionesDB}"
+      DB_SYNCHRONIZE: "true"
+      DB_LOGGING: "false"
+      DB_ENCRYPT: "false"
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - promociones_net
+
+volumes:
+  sqlserver_data:
+    driver: local
+
+networks:
+  promociones_net:
+    driver: bridge
