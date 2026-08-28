@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PromocionesModule } from './promociones.module';
-
 import { CategoriaOrmEntity } from './infrastructure/persistence/typeorm/entities/categoria.orm-entity';
 import { ProductoOrmEntity } from './infrastructure/persistence/typeorm/entities/producto.orm-entity';
 import { TipoDescuentoOrmEntity } from './infrastructure/persistence/typeorm/entities/tipo-descuento.orm-entity';
@@ -21,38 +20,46 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'mssql',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT', 1433),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        synchronize: configService.get<boolean>('DB_SYNCHRONIZE', false),
-        logging: configService.get<boolean>('DB_LOGGING', false),
-        entities: [
-          CategoriaOrmEntity,
-          ProductoOrmEntity,
-          TipoDescuentoOrmEntity,
-          EstadoPromocionOrmEntity,
-          PromocionOrmEntity,
-          PromocionProductoOrmEntity,
-          PromocionCategoriaOrmEntity,
-          PromocionReglaOrmEntity,
-          VentaOrmEntity,
-          DetalleVentaOrmEntity,
-        ],
-        options: {
-          encrypt: configService.get<boolean>('DB_ENCRYPT', true),
-          trustServerCertificate: configService.get<boolean>('DB_TRUST_CERT', true),
-          enableArithAbort: true,
-        },
-        extra: {
-          validateConnection: false,
-          trustServerCertificate: configService.get<boolean>('DB_TRUST_CERT', true),
-        },
-      }),
+      useFactory: () => {
+        // Importante: Revisa envConfig o process.env dentro de la fábrica
+        const host = process.env.DB_HOST || 'localhost';
+        const port = Number(process.env.DB_PORT) || 1433;
+        const username = process.env.DB_USERNAME || 'sa';
+        const password = process.env.DB_PASSWORD || '';
+        const database = process.env.DB_NAME || 'test';
+
+        return {
+          type: 'mssql',
+          host,
+          port,
+          username,
+          password,
+          database,
+          synchronize: process.env.NODE_ENV !== 'production',
+          logging: process.env.NODE_ENV === 'development',
+          entities: [
+            CategoriaOrmEntity,
+            ProductoOrmEntity,
+            TipoDescuentoOrmEntity,
+            EstadoPromocionOrmEntity,
+            PromocionOrmEntity,
+            PromocionProductoOrmEntity,
+            PromocionCategoriaOrmEntity,
+            PromocionReglaOrmEntity,
+            VentaOrmEntity,
+            DetalleVentaOrmEntity,
+          ],
+          options: {
+            encrypt: process.env.DB_ENCRYPT === 'true',
+            trustServerCertificate: true,
+            enableArithAbort: true,
+          },
+          extra: {
+            validateConnection: false,
+            trustServerCertificate: true,
+          },
+        };
+      },
     }),
     PromocionesModule,
   ],
