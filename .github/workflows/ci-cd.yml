@@ -33,10 +33,10 @@ jobs:
           echo "✅ Validación de secretos y variables exitosa."
 
   # ---------------------------------------------------------------------------
-  # Etapa 2: Linter
+  # Etapa 2: Verificación de Código (Linter + Pruebas Unitarias)
   # ---------------------------------------------------------------------------
-  lint:
-    name: 1. Linter
+  code-quality:
+    name: 1. Linter & Pruebas Unitarias
     needs: [validate-secrets]
     runs-on: ubuntu-latest
     steps:
@@ -55,37 +55,19 @@ jobs:
       - name: Ejecutar Linter / Verificación de Tipos
         run: npm run lint
 
-  # ---------------------------------------------------------------------------
-  # Etapa 3: Pruebas Unitarias
-  # ---------------------------------------------------------------------------
-  test:
-    name: 2. Pruebas Unitarias
-    needs: [lint]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout del repositorio
-        uses: actions/checkout@v4
-
-      - name: Configurar Node.js 22.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-          cache: 'npm'
-
-      - name: Instalar dependencias
-        run: npm ci
-
       - name: Ejecutar Suite de Tests Unitarios
         run: npm test -- --runInBand
 
   # ---------------------------------------------------------------------------
-  # Etapa 4: Smoke Test de Integración y Validación de Build Docker
+  # Etapa 3: Smoke Test de Integración con Docker Compose
   # ---------------------------------------------------------------------------
   smoke-test:
-    name: 3. Build Docker & Smoke Test (/health)
-    needs: [test]
+    name: 2. Build Docker & Smoke Test (/health)
+    needs: [code-quality]
     runs-on: ubuntu-latest
     env:
+      DOCKER_BUILDKIT: 1
+      COMPOSE_DOCKER_CLI_BUILD: 1
       NODE_OPTIONS: "--max-old-space-size=4096"
       DB_HOST: sqlserver
       DB_USER: sa
@@ -104,6 +86,9 @@ jobs:
     steps:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx (BuildKit)
+        uses: docker/setup-buildx-action@v3
 
       - name: Validar presencia de DB_PASSWORD en tiempo de ejecución
         run: |
@@ -130,27 +115,23 @@ jobs:
           echo "DB_TRUST_SERVER_CERTIFICATE=${DB_TRUST_SERVER_CERTIFICATE}" >> .env
           echo "DB_SYNCHRONIZE=${DB_SYNCHRONIZE}" >> .env
 
-      - name: Precargar imagen de la BD y construir Backend sin importación lenta
+      - name: Precargar imágenes y construir Backend con BuildKit
         run: |
-          echo "Iniciando descarga de SQL Server..."
+          echo "Descargando imágenes de SQL Server..."
           docker compose pull sqlserver db-init || true
-          echo "Construyendo backend directo en el demonio de Docker..."
-          DOCKER_BUILDKIT=0 docker compose build
+          echo "Construyendo backend..."
+          docker compose build
 
-      - name: Levantar servicios con Docker Compose
+      - name: Levantar servicios y esperar disponibilidad (Healthchecks)
         run: |
-          docker compose up -d
-
-      - name: Esperar disponibilidad inicial de servicios
-        run: |
-          echo "Esperando que los contenedores y la base de datos se inicialicen..."
-          sleep 20
+          echo "Iniciando contenedores..."
+          docker compose up -d --wait
 
       - name: Ejecutar Smoke Test en endpoint /health
         run: |
           echo "Realizando petición a http://localhost:3000/api/v1/health ..."
           
-          MAX_ATTEMPTS=20
+          MAX_ATTEMPTS=10
           ATTEMPT=1
           SUCCESS=0
           
@@ -170,13 +151,13 @@ jobs:
               break
             fi
             
-            echo "Servicio aún no listo. Reintentando en 5 segundos..."
-            sleep 5
+            echo "Servicio respondiendo diferente a 200. Reintentando en 3 segundos..."
+            sleep 3
             ATTEMPT=$((ATTEMPT + 1))
           done
           
           if [ $SUCCESS -ne 1 ]; then
-            echo "::error::Smoke test fallido: El endpoint /health no respondió con código 200 dentro del tiempo esperado."
+            echo "::error::Smoke test fallido: El endpoint /health no respondió con código 200."
             echo "Logs de los contenedores para diagnóstico:"
             docker compose logs
             exit 1
