@@ -29,3 +29,13 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+tsconfig.tsbuildinfo
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+
+tsconfig.tsbuildinfo

@@ -10,7 +10,24 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Global prefixes and middlewares
-  app.enableCors();
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      const normalizedOrigin = origin.replace(/\/$/, '');
+      const isAllowed = envConfig.corsOrigins.some(
+        (allowed) => allowed.replace(/\/$/, '') === normalizedOrigin
+      );
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Fallback to allow or specific configuration
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+  });
   app.setGlobalPrefix(envConfig.apiPrefix.replace(/^\//, ''));
 
   // Global Validation Pipe (DTO enforcement)

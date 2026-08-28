@@ -1,5 +1,5 @@
 import { Observable } from 'rxjs';
-import { DeletePromocionResponseDto } from '../../use-cases/delete-promocion.use-case';
+import { DeletePromocionResponseDto } from '../../dtos/delete-promocion-response.dto';
 
 export interface DeletePromocionUseCasePort {
   execute(id: number): Observable<DeletePromocionResponseDto>;

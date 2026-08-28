@@ -9,6 +9,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { Observable } from 'rxjs';
 import { CreatePromocionReglaDto } from '../../../../../application/dtos/create-promocion-regla.dto';
 import { PromocionReglaResponseDto } from '../../../../../application/dtos/promocion-regla-response.dto';
+import { ErrorResponseDto } from '../../../../../application/dtos/error-response.dto';
 import { CreatePromocionReglaUseCase } from '../../../../../application/use-cases/create-promocion-regla.use-case';
 
 @ApiTags('Reglas de Promoción')
@@ -32,14 +33,17 @@ export class PromocionReglaController {
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'Error en la validación del DTO de entrada',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'No se encontró la promoción indicada',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     description: 'La promoción se encuentra en estado Finalizada y no puede modificarse',
+    type: ErrorResponseDto,
   })
   public create(@Body() dto: CreatePromocionReglaDto): Observable<PromocionReglaResponseDto> {
     return this.createPromocionReglaUseCase.execute(dto);

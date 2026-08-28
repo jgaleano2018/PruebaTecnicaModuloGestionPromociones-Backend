@@ -9,6 +9,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { Observable } from 'rxjs';
 import { CreatePromocionProductoDto } from '../../../../../application/dtos/create-promocion-producto.dto';
 import { PromocionProductoResponseDto } from '../../../../../application/dtos/promocion-producto-response.dto';
+import { ErrorResponseDto } from '../../../../../application/dtos/error-response.dto';
 import { CreatePromocionProductoUseCase } from '../../../../../application/use-cases/create-promocion-producto.use-case';
 
 @ApiTags('Promoción Productos')
@@ -34,14 +35,17 @@ export class PromocionProductoController {
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'Error de validación o el producto ya está asociado a la promoción',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'No se encontró la promoción indicada',
+    description: 'No se encontró la promoción o producto indicado',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     description: 'La promoción se encuentra en estado Finalizada y no puede modificarse',
+    type: ErrorResponseDto,
   })
   public create(
     @Body() dto: CreatePromocionProductoDto

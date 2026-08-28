@@ -1,12 +1,18 @@
 import { of, throwError } from 'rxjs';
 import { CreatePromocionUseCase } from './create-promocion.use-case';
+import { ListPromocionesUseCase } from './list-promociones.use-case';
 import { ChangeEstadoPromocionUseCase } from './change-estado-promocion.use-case';
 import { DeletePromocionUseCase } from './delete-promocion.use-case';
+import { GetResumenEstadosUseCase } from './get-resumen-estados.use-case';
+import { GetResumenVigentesUseCase } from './get-resumen-vigentes.use-case';
 import { PromocionRepositoryInterface } from '../../domain/repositories/promocion.repository.interface';
 import { Promocion } from '../../domain/entities/promocion.entity';
 import { EstadoPromocionEnum } from '../../domain/value-objects/estado-promocion.enum';
 import { TipoDescuentoEnum } from '../../domain/value-objects/tipo-descuento.enum';
-import { PromotionNotFoundException } from '../../domain/exceptions/domain.exception';
+import {
+  PromotionNotFoundException,
+  BusinessRuleValidationException,
+} from '../../domain/exceptions/domain.exception';
 
 describe('Application Layer: Reactive Use Cases', () => {
   let mockRepository: jest.Mocked<PromocionRepositoryInterface>;
@@ -52,6 +58,37 @@ describe('Application Layer: Reactive Use Cases', () => {
           expect(response.nombre).toBe('Promo RxJS');
           expect(response.tipoDescuentoNombre).toBe('Porcentaje');
           expect(response.estadoPromocionNombre).toBe('Programada');
+          done();
+        },
+        error: (err) => done(err),
+      });
+    });
+  });
+
+  describe('ListPromocionesUseCase', () => {
+    it('debe listar todas las promociones y emitir los DTOs correspondientes', (done) => {
+      const useCase = new ListPromocionesUseCase(mockRepository);
+      const mockList = [
+        new Promocion({
+          id: 1,
+          nombre: 'Promo 1',
+          tipoDescuentoId: 1,
+          valorDescuento: 10,
+          fechaInicio: new Date('2026-08-01'),
+          fechaFin: new Date('2026-08-31'),
+          productoIds: [1],
+          estadoPromocionId: EstadoPromocionEnum.PROGRAMADA,
+          activa: false,
+        }),
+      ];
+
+      mockRepository.findAll.mockReturnValue(of(mockList));
+
+      useCase.execute().subscribe({
+        next: (res) => {
+          expect(res).toHaveLength(1);
+          expect(res[0].id).toBe(1);
+          expect(res[0].nombre).toBe('Promo 1');
           done();
         },
         error: (err) => done(err),
@@ -127,6 +164,88 @@ describe('Application Layer: Reactive Use Cases', () => {
           done();
         },
         error: (err) => done(err),
+      });
+    });
+  });
+
+  describe('GetResumenEstadosUseCase', () => {
+    it('debe retornar conteo de promociones por estado', (done) => {
+      const useCase = new GetResumenEstadosUseCase(mockRepository);
+      const mockConteo = {
+        programada: 2,
+        activa: 3,
+        finalizada: 5,
+        total: 10,
+      };
+
+      mockRepository.countByEstado.mockReturnValue(of(mockConteo));
+
+      useCase.execute().subscribe({
+        next: (res) => {
+          expect(res.programada).toBe(2);
+          expect(res.activa).toBe(3);
+          expect(res.finalizada).toBe(5);
+          expect(res.total).toBe(10);
+          done();
+        },
+        error: (err) => done(err),
+      });
+    });
+  });
+
+  describe('GetResumenVigentesUseCase', () => {
+    it('debe retornar el resumen de promociones vigentes para fechas válidas', (done) => {
+      const useCase = new GetResumenVigentesUseCase(mockRepository);
+      const query = {
+        fechaInicio: '2026-08-01T00:00:00.000Z',
+        fechaFin: '2026-08-31T23:59:59.000Z',
+      };
+
+      const mockVigentes = {
+        totalVigentes: 1,
+        fechaInicioFiltro: query.fechaInicio,
+        fechaFinFiltro: query.fechaFin,
+        promociones: [
+          new Promocion({
+            id: 1,
+            nombre: 'Promo Vigente',
+            tipoDescuentoId: 1,
+            valorDescuento: 10,
+            fechaInicio: new Date('2026-08-01'),
+            fechaFin: new Date('2026-08-31'),
+            productoIds: [1],
+            estadoPromocionId: EstadoPromocionEnum.ACTIVA,
+            activa: true,
+          }),
+        ],
+      };
+
+      mockRepository.countVigentes.mockReturnValue(of(mockVigentes));
+
+      useCase.execute(query).subscribe({
+        next: (res) => {
+          expect(res.totalVigentes).toBe(1);
+          expect(res.promociones).toHaveLength(1);
+          expect(res.promociones[0].nombre).toBe('Promo Vigente');
+          done();
+        },
+        error: (err) => done(err),
+      });
+    });
+
+    it('debe fallar si fechaFin es menor a fechaInicio', (done) => {
+      const useCase = new GetResumenVigentesUseCase(mockRepository);
+      const query = {
+        fechaInicio: '2026-08-31T00:00:00.000Z',
+        fechaFin: '2026-08-01T00:00:00.000Z',
+      };
+
+      useCase.execute(query).subscribe({
+        next: () => done.fail('No debió ejecutar consulta'),
+        error: (err) => {
+          expect(err).toBeInstanceOf(BusinessRuleValidationException);
+          done();
+        },
       });
     });
   });

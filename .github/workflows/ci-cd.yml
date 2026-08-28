@@ -1,0 +1,176 @@
+name: CI/CD Pipeline - Backend Gestión de Promociones
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Etapa 1: Validar Secretos y Variables Requeridas
+  # ---------------------------------------------------------------------------
+  validate-secrets:
+    name: Validar Variables de Entorno
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar variables requeridas
+        run: |
+          echo "Verificando variables requeridas para el pipeline..."
+          MISSING_VARS=0
+          
+          if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
+            echo "::error::Falta la variable secreta requerida: DB_PASSWORD en GitHub Secrets."
+            MISSING_VARS=1
+          fi
+          
+          if [ $MISSING_VARS -ne 0 ]; then
+            echo "Error: Faltan variables de entorno obligatorias para ejecutar el pipeline."
+            exit 1
+          fi
+          
+          echo "✅ Validación de secretos y variables exitosa."
+
+  # ---------------------------------------------------------------------------
+  # Etapa 2: Linter
+  # ---------------------------------------------------------------------------
+  lint:
+    name: 1. Linter
+    needs: [validate-secrets]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar Linter / Verificación de Tipos
+        run: npm run lint
+
+  # ---------------------------------------------------------------------------
+  # Etapa 3: Pruebas Unitarias
+  # ---------------------------------------------------------------------------
+  test:
+    name: 2. Pruebas Unitarias
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar Suite de Tests Unitarios
+        run: npm test -- --runInBand
+
+  # ---------------------------------------------------------------------------
+  # Etapa 4: Construcción de la Imagen Docker
+  # ---------------------------------------------------------------------------
+  build:
+    name: 3. Construcción Imagen Docker
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compilar y validar imagen Docker del Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: promociones-backend:latest
+          load: true
+
+  # ---------------------------------------------------------------------------
+  # Etapa 5: Smoke Test de Integración (/health check con Docker Compose)
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    name: 4. Smoke Test de Integración (/health)
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_PORT: 1433
+      DB_NAME: PromocionesDB
+      PORT: 3000
+      API_PREFIX: /api/v1
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar presencia de DB_PASSWORD en tiempo de ejecución
+        run: |
+          if [ -z "$DB_PASSWORD" ]; then
+            echo "::error::DB_PASSWORD está vacía. El pipeline fallará de forma explícita."
+            exit 1
+          fi
+
+      - name: Levantar servicios con Docker Compose
+        run: |
+          docker compose up -d --build
+
+      - name: Esperar disponibilidad de los contenedores
+        run: |
+          echo "Esperando que los contenedores y la base de datos se inicialicen..."
+          sleep 25
+
+      - name: Ejecutar Smoke Test en endpoint /health
+        run: |
+          echo "Realizando petición a http://localhost:3000/api/v1/health ..."
+          
+          MAX_ATTEMPTS=15
+          ATTEMPT=1
+          SUCCESS=0
+          
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "Intento $ATTEMPT de $MAX_ATTEMPTS..."
+            HTTP_RESPONSE=$(curl -s -o response.json -w "%{http_code}" http://localhost:3000/api/v1/health || true)
+            
+            echo "Código HTTP recibido: $HTTP_RESPONSE"
+            if [ -f response.json ]; then
+              cat response.json
+              echo ""
+            fi
+            
+            if [ "$HTTP_RESPONSE" -eq 200 ]; then
+              echo "✅ Smoke test exitoso: El endpoint /health respondió 200 OK y la base de datos está conectada."
+              SUCCESS=1
+              break
+            fi
+            
+            echo "Servicio aún no listo. Reintentando en 5 segundos..."
+            sleep 5
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+          
+          if [ $SUCCESS -ne 1 ]; then
+            echo "::error::Smoke test fallido: El endpoint /health no respondió con código 200 dentro del tiempo esperado."
+            echo "Logs de los contenedores para diagnóstico:"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Detener y limpiar contenedores
+        if: always()
+        run: |
+          docker compose down -v

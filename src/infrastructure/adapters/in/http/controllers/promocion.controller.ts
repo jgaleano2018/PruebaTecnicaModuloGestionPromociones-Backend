@@ -27,7 +27,8 @@ import { QueryVigenciaDto } from '../../../../../application/dtos/query-vigencia
 import { PromocionResponseDto } from '../../../../../application/dtos/promocion-response.dto';
 import { ResumenConteoEstadosDto } from '../../../../../application/dtos/promocion-resumen-estado.dto';
 import { ResumenVigenciaDto } from '../../../../../application/dtos/promocion-resumen-vigencia.dto';
-import { DeletePromocionResponseDto } from '../../../../../application/use-cases/delete-promocion.use-case';
+import { DeletePromocionResponseDto } from '../../../../../application/dtos/delete-promocion-response.dto';
+import { ErrorResponseDto } from '../../../../../application/dtos/error-response.dto';
 import { CreatePromocionUseCase } from '../../../../../application/use-cases/create-promocion.use-case';
 import { ListPromocionesUseCase } from '../../../../../application/use-cases/list-promociones.use-case';
 import { ChangeEstadoPromocionUseCase } from '../../../../../application/use-cases/change-estado-promocion.use-case';
@@ -63,6 +64,7 @@ export class PromocionController {
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'Validaciones de negocio o esquema fallaron',
+    type: ErrorResponseDto,
   })
   public create(@Body() dto: CreatePromocionDto): Observable<PromocionResponseDto> {
     return this.createPromocionUseCase.execute(dto);
@@ -111,6 +113,7 @@ export class PromocionController {
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'Fechas de filtro inválidas',
+    type: ErrorResponseDto,
   })
   public getResumenVigentes(@Query() query: QueryVigenciaDto): Observable<ResumenVigenciaDto> {
     return this.getResumenVigentesUseCase.execute(query);
@@ -130,12 +133,19 @@ export class PromocionController {
     type: PromocionResponseDto,
   })
   @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'El ID o los datos de entrada son inválidos',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Promoción no encontrada',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     description: 'Transición de estado inválida',
+    type: ErrorResponseDto,
   })
   public changeEstadoPatch(
     @Param('id', ParseIntPipe) id: number,
@@ -158,12 +168,19 @@ export class PromocionController {
     type: PromocionResponseDto,
   })
   @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'El ID o los datos de entrada son inválidos',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Promoción no encontrada',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     description: 'Transición de estado inválida',
+    type: ErrorResponseDto,
   })
   public changeEstadoPut(
     @Param('id', ParseIntPipe) id: number,
@@ -182,14 +199,22 @@ export class PromocionController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Promoción eliminada exitosamente',
+    type: DeletePromocionResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'El ID es inválido',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Promoción no encontrada',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     description: 'Solo se pueden eliminar promociones en estado Programada',
+    type: ErrorResponseDto,
   })
   public delete(@Param('id', ParseIntPipe) id: number): Observable<DeletePromocionResponseDto> {
     return this.deletePromocionUseCase.execute(id);

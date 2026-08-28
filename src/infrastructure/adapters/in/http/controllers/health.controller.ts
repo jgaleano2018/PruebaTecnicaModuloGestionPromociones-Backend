@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus } from '@nestjs/common';
+import { Controller, Get, HttpStatus, HttpException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
 
@@ -24,12 +24,15 @@ export class HealthController {
   public async check() {
     try {
       if (!this.dataSource.isInitialized) {
-        return {
-          status: 'DOWN',
-          database: 'disconnected',
-          message: 'Conexión a SQL Server no inicializada',
-          timestamp: new Date().toISOString(),
-        };
+        throw new HttpException(
+          {
+            status: 'DOWN',
+            database: 'disconnected',
+            message: 'Conexión a SQL Server no inicializada',
+            timestamp: new Date().toISOString(),
+          },
+          HttpStatus.SERVICE_UNAVAILABLE
+        );
       }
 
       await this.dataSource.query('SELECT 1 AS alive');
@@ -37,15 +40,22 @@ export class HealthController {
       return {
         status: 'UP',
         database: 'connected',
+        message: 'Servicio y conexión a base de datos operativas',
         timestamp: new Date().toISOString(),
       };
     } catch (error: any) {
-      return {
-        status: 'DOWN',
-        database: 'disconnected',
-        error: error.message || 'Error de conexión',
-        timestamp: new Date().toISOString(),
-      };
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          status: 'DOWN',
+          database: 'disconnected',
+          error: error.message || 'Error de conexión a la base de datos',
+          timestamp: new Date().toISOString(),
+        },
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
     }
   }
 }

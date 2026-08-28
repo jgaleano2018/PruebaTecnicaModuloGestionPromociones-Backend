@@ -2,11 +2,7 @@ import { Observable, switchMap, throwError } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { PromocionRepositoryInterface } from '../../domain/repositories/promocion.repository.interface';
 import { PromotionNotFoundException } from '../../domain/exceptions/domain.exception';
-
-export interface DeletePromocionResponseDto {
-  success: boolean;
-  message: string;
-}
+import { DeletePromocionResponseDto } from '../dtos/delete-promocion-response.dto';
 
 export class DeletePromocionUseCase {
   constructor(private readonly promocionRepository: PromocionRepositoryInterface) {}

@@ -15,10 +15,24 @@ import { DetalleVentaOrmEntity } from './entities/detalle-venta.orm-entity';
 export const AppDataSource = new DataSource({
   type: 'mssql',
   host: envConfig.database.host,
-  port: envConfig.database.port,
+  ...(envConfig.database.instanceName ? {} : { port: envConfig.database.port }),
   username: envConfig.database.username,
   password: envConfig.database.password,
   database: envConfig.database.database,
+  ...(envConfig.database.domain ? { domain: envConfig.database.domain } : {}),
+  ...(envConfig.database.useWindowsAuth
+    ? {
+        domain: envConfig.database.domain,
+        authentication: {
+          type: 'ntlm' as const,
+          options: {
+            domain: envConfig.database.domain,
+            userName: envConfig.database.username,
+            password: envConfig.database.password,
+          },
+        },
+      }
+    : {}),
   synchronize: envConfig.database.synchronize,
   logging: envConfig.database.logging,
   entities: [
@@ -34,6 +48,9 @@ export const AppDataSource = new DataSource({
     DetalleVentaOrmEntity,
   ],
   options: {
+    ...(envConfig.database.instanceName
+      ? { instanceName: envConfig.database.instanceName }
+      : {}),
     encrypt: envConfig.database.encrypt,
     trustServerCertificate: envConfig.database.trustServerCertificate,
     enableArithAbort: true,
@@ -41,5 +58,6 @@ export const AppDataSource = new DataSource({
   extra: {
     validateConnection: false,
     trustServerCertificate: envConfig.database.trustServerCertificate,
+    ...(envConfig.database.useWindowsAuth ? { trustedConnection: true } : {}),
   },
 });
