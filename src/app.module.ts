@@ -21,41 +21,53 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'mssql',
-        host: configService.get<string>('DB_HOST', 'sqlserver'),
-        port: Number(configService.get<number>('DB_PORT', 1433)),
-        // Se añade fallback entre DB_USER (usado en tu docker-compose) y DB_USERNAME
-        username: configService.get<string>('DB_USER') || configService.get<string>('DB_USERNAME') || 'sa',
-        password: configService.get<string>('DB_PASSWORD') || '',
-        database: configService.get<string>('DB_NAME', 'PromocionesDB'),
-        synchronize: configService.get<string>('DB_SYNCHRONIZE') === 'true',
-        logging: configService.get<string>('DB_LOGGING')==='true',
-        retryAttempts: 20,
-        retryDelay: 3000,
-        verboseRetryLog: true,
-        entities: [
-          CategoriaOrmEntity,
-          ProductoOrmEntity,
-          TipoDescuentoOrmEntity,
-          EstadoPromocionOrmEntity,
-          PromocionOrmEntity,
-          PromocionProductoOrmEntity,
-          PromocionCategoriaOrmEntity,
-          PromocionReglaOrmEntity,
-          VentaOrmEntity,
-          DetalleVentaOrmEntity,
-        ],
-        options: {
-          encrypt: configService.get<string>('DB_ENCRYPT') === 'true',
-          trustServerCertificate: configService.get<string>('DB_TRUST_SERVER_CERTIFICATE') !== 'false',
-          enableArithAbort: true,
-        },
-        extra: {
-          validateConnection: false,
-          trustServerCertificate: configService.get<string>('DB_TRUST_SERVER_CERTIFICATE') !== 'false',
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const rawPort = configService.get<string>('DB_PORT');
+        const port = rawPort ? parseInt(rawPort, 10) : 1433;
+
+        const dbUser =
+          configService.get<string>('DB_USER') ||
+          configService.get<string>('DB_USERNAME') ||
+          'sa';
+
+        const dbPassword = configService.get<string>('DB_PASSWORD');
+
+        return {
+          type: 'mssql',
+          host: configService.get<string>('DB_HOST', 'sqlserver'),
+          port: isNaN(port) ? 1433 : port,
+          username: dbUser,
+          password: dbPassword,
+          database: configService.get<string>('DB_NAME', 'PromocionesDB'),
+          synchronize: String(configService.get('DB_SYNCHRONIZE', 'true')) === 'true',
+          logging: String(configService.get('DB_LOGGING', 'false')) === 'true',
+          retryAttempts: 20,
+          retryDelay: 3000,
+          verboseRetryLog: true,
+          entities: [
+            CategoriaOrmEntity,
+            ProductoOrmEntity,
+            TipoDescuentoOrmEntity,
+            EstadoPromocionOrmEntity,
+            PromocionOrmEntity,
+            PromocionProductoOrmEntity,
+            PromocionCategoriaOrmEntity,
+            PromocionReglaOrmEntity,
+            VentaOrmEntity,
+            DetalleVentaOrmEntity,
+          ],
+          options: {
+            encrypt: String(configService.get('DB_ENCRYPT', 'false')) === 'true',
+            trustServerCertificate:
+              String(configService.get('DB_TRUST_SERVER_CERTIFICATE', 'true')) !== 'false',
+            enableArithAbort: true,
+          },
+          extra: {
+            trustServerCertificate:
+              String(configService.get('DB_TRUST_SERVER_CERTIFICATE', 'true')) !== 'false',
+          },
+        };
+      },
     }),
     PromocionesModule,
   ],
