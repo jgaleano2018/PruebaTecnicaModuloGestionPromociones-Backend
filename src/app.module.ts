@@ -22,15 +22,14 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
     TypeOrmModule.forRoot({
     type: 'mssql',
 
-    host: envConfig.database.host,
-    port: envConfig.database.port,
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT),
+    username: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
 
-    username: envConfig.database.username,
-    password: envConfig.database.password,
-    database: envConfig.database.database,
-
-    synchronize: envConfig.database.synchronize,
-    logging: envConfig.database.logging,
+    synchronize: process.env.NODE_ENV === 'development',
+    logging: process.env.NODE_ENV === 'development',
 
     entities: [
         CategoriaOrmEntity,
