@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { envConfig } from './infrastructure/config/env.config';
 import { PromocionesModule } from './promociones.module';
+
 import { CategoriaOrmEntity } from './infrastructure/persistence/typeorm/entities/categoria.orm-entity';
 import { ProductoOrmEntity } from './infrastructure/persistence/typeorm/entities/producto.orm-entity';
 import { TipoDescuentoOrmEntity } from './infrastructure/persistence/typeorm/entities/tipo-descuento.orm-entity';
@@ -19,36 +19,40 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRoot({
-      type: 'mssql',
-      host: envConfig.database.host,
-      port: envConfig.database.port,
-      username: envConfig.database.username,
-      password: envConfig.database.password,
-      database: envConfig.database.database,
-      synchronize: envConfig.database.synchronize,
-      logging: envConfig.database.logging,
-      entities: [
-        CategoriaOrmEntity,
-        ProductoOrmEntity,
-        TipoDescuentoOrmEntity,
-        EstadoPromocionOrmEntity,
-        PromocionOrmEntity,
-        PromocionProductoOrmEntity,
-        PromocionCategoriaOrmEntity,
-        PromocionReglaOrmEntity,
-        VentaOrmEntity,
-        DetalleVentaOrmEntity,
-      ],
-      options: {
-        encrypt: envConfig.database.encrypt,
-        trustServerCertificate: envConfig.database.trustServerCertificate,
-        enableArithAbort: true,
-      },
-      extra: {
-        validateConnection: false,
-        trustServerCertificate: envConfig.database.trustServerCertificate,
-      },
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'mssql',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT', 1433),
+        username: configService.get<string>('DB_USERNAME'),
+        password: configService.get<string>('DB_PASSWORD'),
+        database: configService.get<string>('DB_NAME'),
+        synchronize: configService.get<boolean>('DB_SYNCHRONIZE', false),
+        logging: configService.get<boolean>('DB_LOGGING', false),
+        entities: [
+          CategoriaOrmEntity,
+          ProductoOrmEntity,
+          TipoDescuentoOrmEntity,
+          EstadoPromocionOrmEntity,
+          PromocionOrmEntity,
+          PromocionProductoOrmEntity,
+          PromocionCategoriaOrmEntity,
+          PromocionReglaOrmEntity,
+          VentaOrmEntity,
+          DetalleVentaOrmEntity,
+        ],
+        options: {
+          encrypt: configService.get<boolean>('DB_ENCRYPT', true),
+          trustServerCertificate: configService.get<boolean>('DB_TRUST_CERT', true),
+          enableArithAbort: true,
+        },
+        extra: {
+          validateConnection: false,
+          trustServerCertificate: configService.get<boolean>('DB_TRUST_CERT', true),
+        },
+      }),
     }),
     PromocionesModule,
   ],
