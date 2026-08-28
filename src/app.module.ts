@@ -20,46 +20,42 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: () => {
-        // Importante: Revisa envConfig o process.env dentro de la fábrica
-        const host = process.env.DB_HOST || 'localhost';
-        const port = Number(process.env.DB_PORT) || 1433;
-        const username = process.env.DB_USERNAME || 'sa';
-        const password = process.env.DB_PASSWORD || '';
-        const database = process.env.DB_NAME || 'test';
-
-        return {
-          type: 'mssql',
-          host,
-          port,
-          username,
-          password,
-          database,
-          synchronize: process.env.NODE_ENV !== 'production',
-          logging: process.env.NODE_ENV === 'development',
-          entities: [
-            CategoriaOrmEntity,
-            ProductoOrmEntity,
-            TipoDescuentoOrmEntity,
-            EstadoPromocionOrmEntity,
-            PromocionOrmEntity,
-            PromocionProductoOrmEntity,
-            PromocionCategoriaOrmEntity,
-            PromocionReglaOrmEntity,
-            VentaOrmEntity,
-            DetalleVentaOrmEntity,
-          ],
-          options: {
-            encrypt: process.env.DB_ENCRYPT === 'true',
-            trustServerCertificate: true,
-            enableArithAbort: true,
-          },
-          extra: {
-            validateConnection: false,
-            trustServerCertificate: true,
-          },
-        };
-      },
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'mssql',
+        host: configService.get<string>('DB_HOST', 'sqlserver'),
+        port: Number(configService.get<number>('DB_PORT', 1433)),
+        // Se añade fallback entre DB_USER (usado en tu docker-compose) y DB_USERNAME
+        username: configService.get<string>('DB_USER') || configService.get<string>('DB_USERNAME') || 'sa',
+        password: configService.get<string>('DB_PASSWORD') || '',
+        database: configService.get<string>('DB_NAME', 'PromocionesDB'),
+        synchronize: configService.get<string>('DB_SYNCHRONIZE') === 'true',
+        logging: configService.get<string>('DB_LOGGING') === 'true',
+        retryAttempts: 20,
+        retryDelay: 3000,
+        verboseRetryLog: true,
+        entities: [
+          CategoriaOrmEntity,
+          ProductoOrmEntity,
+          TipoDescuentoOrmEntity,
+          EstadoPromocionOrmEntity,
+          PromocionOrmEntity,
+          PromocionProductoOrmEntity,
+          PromocionCategoriaOrmEntity,
+          PromocionReglaOrmEntity,
+          VentaOrmEntity,
+          DetalleVentaOrmEntity,
+        ],
+        options: {
+          encrypt: configService.get<string>('DB_ENCRYPT') === 'true',
+          trustServerCertificate: configService.get<string>('DB_TRUST_SERVER_CERTIFICATE') !== 'false',
+          enableArithAbort: true,
+        },
+        extra: {
+          validateConnection: false,
+          trustServerCertificate: configService.get<string>('DB_TRUST_SERVER_CERTIFICATE') !== 'false',
+        },
+      }),
     }),
     PromocionesModule,
   ],
