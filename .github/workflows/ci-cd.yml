@@ -86,6 +86,7 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
       DB_HOST: sqlserver
       DB_USER: sa
       DB_USERNAME: sa
@@ -116,6 +117,7 @@ jobs:
 
       - name: Crear archivo .env explícito para Docker Compose
         run: |
+          echo "NODE_OPTIONS=${NODE_OPTIONS}" >> .env
           echo "DB_HOST=${DB_HOST}" >> .env
           echo "DB_USER=${DB_USER}" >> .env
           echo "DB_USERNAME=${DB_USERNAME}" >> .env
