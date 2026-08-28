@@ -30,7 +30,7 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
         password: configService.get<string>('DB_PASSWORD') || '',
         database: configService.get<string>('DB_NAME', 'PromocionesDB'),
         synchronize: configService.get<string>('DB_SYNCHRONIZE') === 'true',
-        logging: configService.get<string>('DB_LOGGING') === 'true',
+        logging: configService.get<string>('DB_LOGGING')==='true',
         retryAttempts: 20,
         retryDelay: 3000,
         verboseRetryLog: true,
