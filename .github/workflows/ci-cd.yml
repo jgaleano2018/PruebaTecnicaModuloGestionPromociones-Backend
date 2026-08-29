@@ -2,43 +2,45 @@ name: CI/CD Pipeline - Backend Gestión de Promociones
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   workflow_dispatch:
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Etapa 1: Validar Secretos y Variables Requeridas
-  # ---------------------------------------------------------------------------
+
+  # ===========================================================================
+  # 1. VALIDAR SECRETOS
+  # ===========================================================================
   validate-secrets:
     name: Validar Variables de Entorno
     runs-on: ubuntu-latest
+
     steps:
       - name: Validar variables requeridas
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          echo "Verificando variables requeridas para el pipeline..."
-          MISSING_VARS=0
-          
-          if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
-            echo "::error::Falta la variable secreta requerida: DB_PASSWORD en GitHub Secrets."
-            MISSING_VARS=1
-          fi
-          
-          if [ $MISSING_VARS -ne 0 ]; then
-            echo "Error: Faltan variables de entorno obligatorias para ejecutar el pipeline."
+          set -Eeuo pipefail
+
+          echo "Verificando variables requeridas..."
+
+          if [ -z "${DB_PASSWORD:-}" ]; then
+            echo "::error::Falta el secreto DB_PASSWORD en GitHub Secrets."
             exit 1
           fi
-          
-          echo "✅ Validación de secretos y variables exitosa."
 
-  # ---------------------------------------------------------------------------
-  # Etapa 2: Verificación de Código (Linter + Pruebas Unitarias)
-  # ---------------------------------------------------------------------------
+          echo "✅ DB_PASSWORD está configurada."
+
+
+  # ===========================================================================
+  # 2. CALIDAD DE CÓDIGO
+  # ===========================================================================
   code-quality:
     name: 1. Linter & Pruebas Unitarias
     needs: [validate-secrets]
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
@@ -47,123 +49,414 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          cache: 'npm'
+          cache: npm
 
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Ejecutar Linter / Verificación de Tipos
+      - name: Ejecutar Linter
         run: npm run lint
 
       - name: Ejecutar Suite de Tests Unitarios
         run: npm test -- --runInBand
 
-  # ---------------------------------------------------------------------------
-  # Etapa 3: Smoke Test de Integración con Docker Compose
-  # ---------------------------------------------------------------------------
+
+  # ===========================================================================
+  # 3. DOCKER + INTEGRATION SMOKE TEST
+  # ===========================================================================
   smoke-test:
     name: 2. Build Docker & Smoke Test (/health)
     needs: [code-quality]
     runs-on: ubuntu-latest
+
     env:
       DOCKER_BUILDKIT: 1
       COMPOSE_DOCKER_CLI_BUILD: 1
       NODE_OPTIONS: "--max-old-space-size=4096"
+
       DB_HOST: sqlserver
       DB_USER: sa
       DB_USERNAME: sa
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
       MSSQL_SA_PASSWORD: ${{ secrets.DB_PASSWORD }}
       SA_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
       ACCEPT_EULA: "Y"
+
       DB_PORT: 1433
       DB_NAME: PromocionesDB
+
       PORT: 3000
       API_PREFIX: /api/v1
+
       DB_ENCRYPT: "false"
       DB_TRUST_SERVER_CERTIFICATE: "true"
-      DB_SYNCHRONIZE: "true"
+
+      # Para CI podemos permitir que TypeORM sincronice
+      # si el proyecto está preparado para ello.
+      DB_SYNCHRONIZE: "false"
+
     steps:
+
+      # -----------------------------------------------------------------------
+      # CHECKOUT
+      # -----------------------------------------------------------------------
       - name: Checkout del repositorio
         uses: actions/checkout@v4
 
-      - name: Configurar Docker Buildx (BuildKit)
+
+      # -----------------------------------------------------------------------
+      # DOCKER BUILDX
+      # -----------------------------------------------------------------------
+      - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Validar presencia de DB_PASSWORD en tiempo de ejecución
+
+      # -----------------------------------------------------------------------
+      # VALIDAR SECRET
+      # -----------------------------------------------------------------------
+      - name: Validar DB_PASSWORD
         run: |
-          if [ -z "$DB_PASSWORD" ]; then
-            echo "::error::DB_PASSWORD está vacía. El pipeline fallará de forma explícita."
+          set -Eeuo pipefail
+
+          if [ -z "${DB_PASSWORD:-}" ]; then
+            echo "::error::DB_PASSWORD está vacía."
             exit 1
           fi
 
-      - name: Crear archivo .env explícito para Docker Compose
-        run: |
-          echo "NODE_OPTIONS=${NODE_OPTIONS}" >> .env
-          echo "DB_HOST=${DB_HOST}" >> .env
-          echo "DB_USER=${DB_USER}" >> .env
-          echo "DB_USERNAME=${DB_USERNAME}" >> .env
-          echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
-          echo "MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}" >> .env
-          echo "SA_PASSWORD=${SA_PASSWORD}" >> .env
-          echo "ACCEPT_EULA=${ACCEPT_EULA}" >> .env
-          echo "DB_PORT=${DB_PORT}" >> .env
-          echo "DB_NAME=${DB_NAME}" >> .env
-          echo "PORT=${PORT}" >> .env
-          echo "API_PREFIX=${API_PREFIX}" >> .env
-          echo "DB_ENCRYPT=${DB_ENCRYPT}" >> .env
-          echo "DB_TRUST_SERVER_CERTIFICATE=${DB_TRUST_SERVER_CERTIFICATE}" >> .env
-          echo "DB_SYNCHRONIZE=${DB_SYNCHRONIZE}" >> .env
+          echo "✅ DB_PASSWORD disponible."
 
-      - name: Precargar imágenes y construir Backend con BuildKit
+
+      # -----------------------------------------------------------------------
+      # CREAR .ENV
+      # -----------------------------------------------------------------------
+      - name: Crear archivo .env para Docker Compose
         run: |
+          set -Eeuo pipefail
+
+          cat > .env <<EOF
+          NODE_OPTIONS=${NODE_OPTIONS}
+          DB_HOST=${DB_HOST}
+          DB_USER=${DB_USER}
+          DB_USERNAME=${DB_USERNAME}
+          DB_PASSWORD=${DB_PASSWORD}
+          MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+          SA_PASSWORD=${SA_PASSWORD}
+          ACCEPT_EULA=${ACCEPT_EULA}
+          DB_PORT=${DB_PORT}
+          DB_NAME=${DB_NAME}
+          PORT=${PORT}
+          API_PREFIX=${API_PREFIX}
+          DB_ENCRYPT=${DB_ENCRYPT}
+          DB_TRUST_SERVER_CERTIFICATE=${DB_TRUST_SERVER_CERTIFICATE}
+          DB_SYNCHRONIZE=${DB_SYNCHRONIZE}
+          EOF
+
+          echo "✅ Archivo .env creado."
+
+
+      # -----------------------------------------------------------------------
+      # VALIDAR COMPOSE
+      # -----------------------------------------------------------------------
+      - name: Validar Docker Compose
+        run: |
+          set -Eeuo pipefail
+
+          docker compose config > compose-resolved.yml
+
+          echo "Docker Compose válido."
+
+          echo "Servicios:"
+          docker compose config --services
+
+
+      # -----------------------------------------------------------------------
+      # BUILD
+      # -----------------------------------------------------------------------
+      - name: Construir imágenes Docker
+        run: |
+          set -Eeuo pipefail
+
           echo "Descargando imágenes de SQL Server..."
+
           docker compose pull sqlserver db-init || true
+
           echo "Construyendo backend..."
-          docker compose build
 
-      - name: Levantar servicios y esperar disponibilidad (Healthchecks)
-        run: |
-          echo "Iniciando contenedores..."
-          docker compose up -d --wait
+          docker compose build --no-cache
 
-      - name: Ejecutar Smoke Test en endpoint /health
+          echo "✅ Build completado."
+
+
+      # -----------------------------------------------------------------------
+      # SQL SERVER
+      # -----------------------------------------------------------------------
+      - name: Iniciar SQL Server
         run: |
-          echo "Realizando petición a http://localhost:3000/api/v1/health ..."
-          
+          set -Eeuo pipefail
+
+          echo "Iniciando SQL Server..."
+
+          docker compose up -d sqlserver
+
+          echo "SQL Server iniciado."
+
+          docker compose ps -a
+
+
+      # -----------------------------------------------------------------------
+      # ESPERAR SQL SERVER
+      # -----------------------------------------------------------------------
+      - name: Esperar SQL Server saludable
+        run: |
+          set -Eeuo pipefail
+
+          echo "Esperando SQL Server..."
+
+          MAX_ATTEMPTS=30
+
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+
+            STATUS=$(docker inspect promociones_sqlserver \
+              --format '{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
+
+            echo "Intento $i/$MAX_ATTEMPTS - SQL Server: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ SQL Server saludable."
+              exit 0
+            fi
+
+            sleep 5
+
+          done
+
+          echo "::error::SQL Server no llegó a healthy."
+
+          docker compose ps -a || true
+
+          echo "===== SQL SERVER LOGS ====="
+
+          docker logs promociones_sqlserver --tail 300 || true
+
+          echo "===== SQL SERVER HEALTH ====="
+
+          docker inspect promociones_sqlserver \
+            --format '{{json .State.Health}}' || true
+
+          exit 1
+
+
+      # -----------------------------------------------------------------------
+      # DB INIT
+      # -----------------------------------------------------------------------
+      - name: Ejecutar inicialización de base de datos
+        run: |
+          set -Eeuo pipefail
+
+          echo "Ejecutando db-init..."
+
+          docker compose up -d db-init
+
+          echo "Esperando db-init..."
+
+          MAX_ATTEMPTS=30
+
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+
+            STATUS=$(docker inspect promociones_db_init \
+              --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
+
+            echo "Intento $i/$MAX_ATTEMPTS - db-init: $STATUS"
+
+            if [ "$STATUS" = "exited" ]; then
+
+              EXIT_CODE=$(docker inspect promociones_db_init \
+                --format '{{.State.ExitCode}}')
+
+              echo "db-init terminó con código: $EXIT_CODE"
+
+              if [ "$EXIT_CODE" = "0" ]; then
+                echo "✅ Base de datos inicializada correctamente."
+                exit 0
+              fi
+
+              echo "::error::db-init terminó con código $EXIT_CODE."
+
+              docker logs promociones_db_init --tail 300 || true
+
+              exit 1
+            fi
+
+            sleep 2
+
+          done
+
+          echo "::error::db-init no terminó dentro del tiempo esperado."
+
+          docker logs promociones_db_init --tail 300 || true
+
+          exit 1
+
+
+      # -----------------------------------------------------------------------
+      # BACKEND
+      # -----------------------------------------------------------------------
+      - name: Iniciar Backend
+        run: |
+          set -Eeuo pipefail
+
+          echo "Iniciando backend..."
+
+          docker compose up -d backend
+
+          echo "Backend iniciado."
+
+          docker compose ps -a
+
+
+      # -----------------------------------------------------------------------
+      # ESPERAR BACKEND
+      # -----------------------------------------------------------------------
+      - name: Esperar Backend saludable
+        run: |
+          set -Eeuo pipefail
+
+          echo "Esperando Backend..."
+
+          MAX_ATTEMPTS=30
+
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+
+            STATUS=$(docker inspect promociones_backend \
+              --format '{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
+
+            echo "Intento $i/$MAX_ATTEMPTS - Backend: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ Backend saludable."
+              exit 0
+            fi
+
+            if [ "$STATUS" = "unhealthy" ]; then
+
+              echo "Backend reportado como unhealthy."
+              echo "Esperaremos algunos intentos adicionales..."
+
+            fi
+
+            sleep 5
+
+          done
+
+          echo "=========================================="
+          echo "::error::Backend no llegó a healthy."
+          echo "=========================================="
+
+          echo "===== DOCKER COMPOSE PS ====="
+
+          docker compose ps -a || true
+
+          echo "===== BACKEND LOGS ====="
+
+          docker logs promociones_backend --tail 300 || true
+
+          echo "===== BACKEND HEALTH ====="
+
+          docker inspect promociones_backend \
+            --format '{{json .State.Health}}' || true
+
+          echo "===== BACKEND STATE ====="
+
+          docker inspect promociones_backend \
+            --format '{{.State.Status}} | ExitCode={{.State.ExitCode}} | Error={{.State.Error}}' \
+            || true
+
+          echo "===== SQL SERVER HEALTH ====="
+
+          docker inspect promociones_sqlserver \
+            --format '{{json .State.Health}}' || true
+
+          echo "===== SQL SERVER LOGS ====="
+
+          docker logs promociones_sqlserver --tail 300 || true
+
+          echo "===== DB INIT LOGS ====="
+
+          docker logs promociones_db_init --tail 300 || true
+
+          exit 1
+
+
+      # -----------------------------------------------------------------------
+      # SMOKE TEST HTTP
+      # -----------------------------------------------------------------------
+      - name: Ejecutar Smoke Test /health
+        run: |
+          set -Eeuo pipefail
+
+          echo "=========================================="
+          echo "Smoke Test"
+          echo "=========================================="
+
+          URL="http://localhost:3000/api/v1/health"
+
           MAX_ATTEMPTS=10
-          ATTEMPT=1
-          SUCCESS=0
-          
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            echo "Intento $ATTEMPT de $MAX_ATTEMPTS..."
-            HTTP_RESPONSE=$(curl -s --max-time 3 -o response.json -w "%{http_code}" http://localhost:3000/api/v1/health 2>/dev/null || echo "000")
-            
-            echo "Código HTTP recibido: $HTTP_RESPONSE"
-            if [ -f response.json ] && [ -s response.json ]; then
+
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+
+            echo "Intento $i/$MAX_ATTEMPTS..."
+
+            HTTP_CODE=$(curl \
+              --silent \
+              --show-error \
+              --max-time 5 \
+              --output response.json \
+              --write-out "%{http_code}" \
+              "$URL" || true)
+
+            echo "HTTP Status: $HTTP_CODE"
+
+            if [ -f response.json ]; then
               cat response.json
               echo ""
             fi
-            
-            if [ "$HTTP_RESPONSE" = "200" ]; then
-              echo "✅ Smoke test exitoso: El endpoint /health respondió 200 OK y la base de datos está conectada."
-              SUCCESS=1
-              break
-            fi
-            
-            echo "Servicio respondiendo diferente a 200. Reintentando en 3 segundos..."
-            sleep 3
-            ATTEMPT=$((ATTEMPT + 1))
-          done
-          
-          if [ $SUCCESS -ne 1 ]; then
-            echo "::error::Smoke test fallido: El endpoint /health no respondió con código 200."
-            echo "Logs de los contenedores para diagnóstico:"
-            docker compose logs
-            exit 1
-          fi
 
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Smoke test exitoso."
+              exit 0
+            fi
+
+            sleep 3
+
+          done
+
+          echo "::error::Smoke test fallido."
+
+          echo "===== RESPONSE ====="
+
+          cat response.json 2>/dev/null || true
+
+          echo "===== COMPOSE ====="
+
+          docker compose ps -a || true
+
+          echo "===== BACKEND LOGS ====="
+
+          docker logs promociones_backend --tail 300 || true
+
+          exit 1
+
+
+      # -----------------------------------------------------------------------
+      # LIMPIEZA
+      # -----------------------------------------------------------------------
       - name: Detener y limpiar contenedores
         if: always()
         run: |
-          docker compose down -v
+          echo "Limpiando entorno Docker..."
+
+          docker compose down -v --remove-orphans || true
+
+          echo "✅ Limpieza completada."
