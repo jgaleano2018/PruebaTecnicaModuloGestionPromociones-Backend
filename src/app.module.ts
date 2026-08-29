@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+
 import { PromocionesModule } from './promociones.module';
+
 import { CategoriaOrmEntity } from './infrastructure/persistence/typeorm/entities/categoria.orm-entity';
 import { ProductoOrmEntity } from './infrastructure/persistence/typeorm/entities/producto.orm-entity';
 import { TipoDescuentoOrmEntity } from './infrastructure/persistence/typeorm/entities/tipo-descuento.orm-entity';
@@ -18,32 +20,81 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
+
       useFactory: (configService: ConfigService) => {
-        const rawPort = configService.get<string>('DB_PORT');
-        const port = rawPort ? parseInt(rawPort, 10) : 1433;
+        const host =
+          configService.get<string>('DB_HOST') || 'sqlserver';
 
-        const dbUser =
-          configService.get<string>('DB_USER') ||
-          configService.get<string>('DB_USERNAME') ||
-          'sa';
+        const port = Number(
+          configService.get<string>('DB_PORT') || '1433',
+        );
 
-        const dbPassword = configService.get<string>('DB_PASSWORD');
+        const username =
+          configService.get<string>('DB_USER') || 'sa';
+
+        const password =
+          configService.get<string>('DB_PASSWORD');
+
+        const database =
+          configService.get<string>('DB_NAME') ||
+          'PromocionesDB';
+
+        const synchronize =
+          (
+            configService.get<string>(
+              'DB_SYNCHRONIZE',
+              'false',
+            )
+          ).toLowerCase() === 'true';
+
+        const logging =
+          (
+            configService.get<string>(
+              'DB_LOGGING',
+              'false',
+            )
+          ).toLowerCase() === 'true';
+
+        const encrypt =
+          (
+            configService.get<string>(
+              'DB_ENCRYPT',
+              'false',
+            )
+          ).toLowerCase() === 'true';
+
+        const trustServerCertificate =
+          (
+            configService.get<string>(
+              'DB_TRUST_SERVER_CERTIFICATE',
+              'true',
+            )
+          ).toLowerCase() !== 'false';
 
         return {
-          type: 'mssql',
-          host: configService.get<string>('DB_HOST', 'sqlserver'),
-          port: isNaN(port) ? 1433 : port,
-          username: dbUser,
-          password: dbPassword,
-          database: configService.get<string>('DB_NAME', 'PromocionesDB'),
-          synchronize: String(configService.get('DB_SYNCHRONIZE', 'true')) === 'true',
-          logging: String(configService.get('DB_LOGGING', 'false')) === 'true',
+          type: 'mssql' as const,
+
+          host,
+
+          port: Number.isNaN(port)
+            ? 1433
+            : port,
+
+          username,
+          password,
+          database,
+
+          synchronize,
+          logging,
+
           retryAttempts: 20,
           retryDelay: 3000,
           verboseRetryLog: true,
+
           entities: [
             CategoriaOrmEntity,
             ProductoOrmEntity,
@@ -56,19 +107,16 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
             VentaOrmEntity,
             DetalleVentaOrmEntity,
           ],
+
           options: {
-            encrypt: String(configService.get('DB_ENCRYPT', 'false')) === 'true',
-            trustServerCertificate:
-              String(configService.get('DB_TRUST_SERVER_CERTIFICATE', 'true')) !== 'false',
+            encrypt,
+            trustServerCertificate,
             enableArithAbort: true,
-          },
-          extra: {
-            trustServerCertificate:
-              String(configService.get('DB_TRUST_SERVER_CERTIFICATE', 'true')) !== 'false',
           },
         };
       },
     }),
+
     PromocionesModule,
   ],
 })

@@ -1,4 +1,8 @@
 services:
+
+  # ============================================================
+  # SQL SERVER
+  # ============================================================
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: promociones_sqlserver
@@ -10,31 +14,30 @@ services:
       MSSQL_SA_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD es requerida}"
 
     ports:
-      # Puerto 1434 en Windows -> 1433 dentro del contenedor
-      # El puerto 1433 de Windows ya está siendo utilizado por
-      # otro contenedor SQL Server.
       - "1434:1433"
 
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"
+          "/opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1,1433 -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" -b -o /dev/null"
         ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 25s
-
-    volumes:
-      - sqlserver_data:/var/opt/mssql
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 60s
 
     networks:
       - promociones_net
 
+
+  # ============================================================
+  # DATABASE INITIALIZATION
+  # ============================================================
   db-init:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: promociones_db_init
+    restart: "no"
 
     depends_on:
       sqlserver:
@@ -42,7 +45,7 @@ services:
 
     environment:
       ACCEPT_EULA: "Y"
-      DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD es requerida}"
+      MSSQL_SA_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD es requerida}"
 
     volumes:
       - ./scripts/init-db.sql:/scripts/init-db.sql:ro
@@ -56,44 +59,43 @@ services:
         set -e
 
         echo "=============================================="
-        echo "Inicializando base de datos PromocionesDB"
+        echo "Inicializando PromocionesDB"
         echo "=============================================="
 
-        echo "Esperando conexión con SQL Server..."
+        echo "Esperando SQL Server..."
 
-        CONNECTED=false
-
-        for i in {1..30}; do
+        for i in $$(seq 1 30); do
 
           if /opt/mssql-tools18/bin/sqlcmd \
-            -S sqlserver \
+            -S sqlserver,1433 \
             -U sa \
-            -P "$$DB_PASSWORD" \
+            -P "$$MSSQL_SA_PASSWORD" \
             -C \
-            -Q "SELECT 1" > /dev/null 2>&1
+            -Q "SELECT 1" \
+            > /dev/null 2>&1
           then
             echo "SQL Server disponible."
-            CONNECTED=true
             break
           fi
 
-          echo "SQL Server todavía no está disponible. Intento $$i/30..."
+          if [ "$$i" -eq 30 ]; then
+            echo "ERROR: No fue posible conectarse a SQL Server."
+            exit 1
+          fi
+
+          echo "Esperando SQL Server... intento $$i/30"
           sleep 2
 
         done
 
-        if [ "$$CONNECTED" != "true" ]; then
-          echo "ERROR: No fue posible conectarse a SQL Server después de 30 intentos."
-          exit 1
-        fi
-
         echo "Ejecutando scripts/init-db.sql..."
 
         /opt/mssql-tools18/bin/sqlcmd \
-          -S sqlserver \
+          -S sqlserver,1433 \
           -U sa \
-          -P "$$DB_PASSWORD" \
+          -P "$$MSSQL_SA_PASSWORD" \
           -C \
+          -b \
           -i /scripts/init-db.sql
 
         echo "=============================================="
@@ -103,6 +105,10 @@ services:
     networks:
       - promociones_net
 
+
+  # ============================================================
+  # BACKEND
+  # ============================================================
   backend:
     build:
       context: .
@@ -117,18 +123,17 @@ services:
       NODE_ENV: "production"
       API_PREFIX: "${API_PREFIX:-/api/v1}"
 
-      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}"
+      # Frontend
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:5173}"
 
-      # Dentro de Docker se utiliza el nombre del servicio
-      # y el puerto interno de SQL Server.
+      # SQL Server
       DB_HOST: "${DB_HOST:-sqlserver}"
       DB_PORT: "${DB_PORT:-1433}"
       DB_USER: "${DB_USER:-sa}"
-      DB_USERNAME: "${DB_USER:-sa}"
       DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD es requerida}"
       DB_NAME: "${DB_NAME:-PromocionesDB}"
 
-      # La BD se crea/modifica mediante init-db.sql.
+      # TypeORM / SQL Server
       DB_SYNCHRONIZE: "${DB_SYNCHRONIZE:-false}"
       DB_LOGGING: "${DB_LOGGING:-false}"
       DB_ENCRYPT: "${DB_ENCRYPT:-false}"
@@ -145,7 +150,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://localhost:3000/api/v1/health || exit 1"
+          "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/v1/health || exit 1"
         ]
       interval: 10s
       timeout: 5s
@@ -155,9 +160,17 @@ services:
     networks:
       - promociones_net
 
+
+# ==============================================================
+# VOLUMES
+# ==============================================================
 volumes:
   sqlserver_data:
 
+
+# ==============================================================
+# NETWORK
+# ==============================================================
 networks:
   promociones_net:
     driver: bridge
