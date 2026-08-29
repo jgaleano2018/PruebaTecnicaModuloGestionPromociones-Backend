@@ -123,17 +123,23 @@ services:
       NODE_ENV: "production"
       API_PREFIX: "${API_PREFIX:-/api/v1}"
 
-      # Frontend
-      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:5173}"
+      # ========================================================
+      # CORS - FRONTEND
+      # ========================================================
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3001,http://localhost:4173,http://localhost:5173,http://127.0.0.1:3001,http://127.0.0.1:4173,http://127.0.0.1:5173}"
 
-      # SQL Server
+      # ========================================================
+      # SQL SERVER
+      # ========================================================
       DB_HOST: "${DB_HOST:-sqlserver}"
       DB_PORT: "${DB_PORT:-1433}"
       DB_USER: "${DB_USER:-sa}"
       DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD es requerida}"
       DB_NAME: "${DB_NAME:-PromocionesDB}"
 
-      # TypeORM / SQL Server
+      # ========================================================
+      # TYPEORM / SQL SERVER
+      # ========================================================
       DB_SYNCHRONIZE: "${DB_SYNCHRONIZE:-false}"
       DB_LOGGING: "${DB_LOGGING:-false}"
       DB_ENCRYPT: "${DB_ENCRYPT:-false}"
