@@ -1,8 +1,4 @@
 services:
-
-  # ============================================================
-  # SQL SERVER
-  # ============================================================
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: promociones_sqlserver
@@ -36,10 +32,6 @@ services:
     networks:
       - promociones_net
 
-
-  # ============================================================
-  # DATABASE INITIALIZATION
-  # ============================================================
   db-init:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: promociones_db_init
@@ -111,10 +103,6 @@ services:
     networks:
       - promociones_net
 
-
-  # ============================================================
-  # BACKEND
-  # ============================================================
   backend:
     build:
       context: .
