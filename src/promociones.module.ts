@@ -122,8 +122,11 @@ import { DetalleVentaOrmEntity } from './infrastructure/persistence/typeorm/enti
     // Use Cases (Injected with Outbound Repository Adapter)
     {
       provide: CreatePromocionUseCase,
-      useFactory: (repo: TypeOrmPromocionAdapter) => new CreatePromocionUseCase(repo),
-      inject: [TypeOrmPromocionAdapter],
+      useFactory: (
+        repo: TypeOrmPromocionAdapter,
+        pcRepo: TypeOrmPromocionCategoriaAdapter
+      ) => new CreatePromocionUseCase(repo, pcRepo),
+      inject: [TypeOrmPromocionAdapter, TypeOrmPromocionCategoriaAdapter],
     },
     {
       provide: ListPromocionesUseCase,

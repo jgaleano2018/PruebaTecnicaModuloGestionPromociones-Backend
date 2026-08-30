@@ -6,7 +6,9 @@ import { DeletePromocionUseCase } from './delete-promocion.use-case';
 import { GetResumenEstadosUseCase } from './get-resumen-estados.use-case';
 import { GetResumenVigentesUseCase } from './get-resumen-vigentes.use-case';
 import { PromocionRepositoryInterface } from '../../domain/repositories/promocion.repository.interface';
+import { PromocionCategoriaRepositoryInterface } from '../../domain/repositories/promocion-categoria.repository.interface';
 import { Promocion } from '../../domain/entities/promocion.entity';
+import { PromocionCategoria } from '../../domain/entities/promocion-categoria.entity';
 import { EstadoPromocionEnum } from '../../domain/value-objects/estado-promocion.enum';
 import { TipoDescuentoEnum } from '../../domain/value-objects/tipo-descuento.enum';
 import {
@@ -16,6 +18,7 @@ import {
 
 describe('Application Layer: Reactive Use Cases', () => {
   let mockRepository: jest.Mocked<PromocionRepositoryInterface>;
+  let mockPromocionCategoriaRepository: jest.Mocked<PromocionCategoriaRepositoryInterface>;
 
   beforeEach(() => {
     mockRepository = {
@@ -27,11 +30,18 @@ describe('Application Layer: Reactive Use Cases', () => {
       countByEstado: jest.fn(),
       countVigentes: jest.fn(),
     };
+
+    mockPromocionCategoriaRepository = {
+      create: jest.fn(),
+      findByPromocionId: jest.fn(),
+      exists: jest.fn(),
+      delete: jest.fn(),
+    };
   });
 
   describe('CreatePromocionUseCase', () => {
     it('debe ejecutar la creación y emitir el DTO mapeado reactivamente', (done) => {
-      const useCase = new CreatePromocionUseCase(mockRepository);
+      const useCase = new CreatePromocionUseCase(mockRepository, mockPromocionCategoriaRepository);
       const dto = {
         nombre: 'Promo RxJS',
         tipoDescuentoId: 1,

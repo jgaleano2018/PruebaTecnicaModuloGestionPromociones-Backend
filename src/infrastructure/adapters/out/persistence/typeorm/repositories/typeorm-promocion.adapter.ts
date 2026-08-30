@@ -31,41 +31,12 @@ export class TypeOrmPromocionAdapter implements PromocionRepositoryPort {
       await queryRunner.startTransaction();
 
       try {
+        // El mapper (PromocionEntityMapper.toOrmEntity) ya construye las
+        // entidades hijas (promocion-producto, promocion-categoria y reglas)
+        // tomando el id del DTO inicial; con cascade: true, este save inserta
+        // la promoción y sus relaciones atómicamente dentro de la transacción.
         const ormEntity = PromocionEntityMapper.toOrmEntity(promocion);
         const savedPromocion = await queryRunner.manager.save(ormEntity);
-
-        if (promocion.productoIds && promocion.productoIds.length > 0) {
-          const productos = promocion.productoIds.map((pId) => {
-            const pp = new PromocionProductoOrmEntity();
-            pp.promocionId = savedPromocion.id;
-            pp.productoId = pId;
-            return pp;
-          });
-          await queryRunner.manager.save(productos);
-        }
-
-        if (promocion.categoriaIds && promocion.categoriaIds.length > 0) {
-          const categorias = promocion.categoriaIds.map((cId) => {
-            const pc = new PromocionCategoriaOrmEntity();
-            pc.promocionId = savedPromocion.id;
-            pc.categoriaId = cId;
-            return pc;
-          });
-          await queryRunner.manager.save(categorias);
-        }
-
-        if (promocion.reglas && promocion.reglas.length > 0) {
-          const reglas = promocion.reglas.map((r) => {
-            const pr = new PromocionReglaOrmEntity();
-            pr.promocionId = savedPromocion.id;
-            pr.diasSemana = r.diasSemana ?? null;
-            pr.horaInicio = r.horaInicio ?? null;
-            pr.horaFin = r.horaFin ?? null;
-            pr.limiteUsosPorTicket = r.limiteUsosPorTicket ?? null;
-            return pr;
-          });
-          await queryRunner.manager.save(reglas);
-        }
 
         await queryRunner.commitTransaction();
 

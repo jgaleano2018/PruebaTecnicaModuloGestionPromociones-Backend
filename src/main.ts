@@ -23,6 +23,11 @@ async function bootstrap() {
         return callback(null, true);
       }
 
+      // En desarrollo, permitir todos los orígenes
+      if (envConfig.nodeEnv !== 'production') {
+        return callback(null, true);
+      }
+
       const normalizedOrigin = origin.replace(/\/$/, '');
 
       const isAllowed = envConfig.corsOrigins.some(
@@ -45,9 +50,15 @@ async function bootstrap() {
       'Content-Type',
       'Authorization',
       'Accept',
+      'X-Requested-With',
+      'Origin',
     ],
 
     credentials: true,
+
+    preflightContinue: false,
+
+    optionsSuccessStatus: 204,
   });
 
   // ============================================================
